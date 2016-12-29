@@ -101,22 +101,22 @@ func newVnf(name string, attr string) *Vnf {
 	return vnf
 }
 
-func (vnf *Vnf) init(args string) error {
+func (vnf *Vnf) init(args interface{}) error {
 	fmt.Println("Inside VNF init for VNF", vnf.name)
 	return nil
 }
 
-func (vnf *Vnf) create(args string) error {
+func (vnf *Vnf) create(args interface{}) error {
 	fmt.Println("Inside VNF create for VNF", vnf.name)
 	return nil
 }
 
-func (vnf *Vnf) update(args string) error {
+func (vnf *Vnf) update(args interface{}) error {
 	fmt.Println("Inside VNF update for VNF", vnf.name)
 	return nil
 }
 
-func (vnf *Vnf) delete(args string) error {
+func (vnf *Vnf) delete(args interface{}) error {
 	fmt.Println("Inside VNF delete for VNF", vnf.name)
 	close(vnf.admin_channel)
 	return nil
@@ -147,31 +147,31 @@ func (vnf *Vnf) Sm(state VnfOp, args interface{}) error {
 	if err := vnfSmTable[state](vnf, args); err != nil {
 		fmt.Println("VNF", vnf.name, "failed to transition to state", state, "from state", cur_state)
 		return err
-	} 
+	}
 	vnf.state = state
 	fmt.Println("VNF", vnf.name, "transitioned from state", cur_state, "to state", state)
 	return nil
 }
 
-func (vnf *Vnf) worker(op VnfOp, args string) error {
+func (vnf *Vnf) worker(op VnfOp, args interface{}) error {
 	fmt.Println("Inside random VNF operation", op, "for VNF", vnf.name)
 	return nil
 }
 
 func vnfInit(vnf *Vnf, args interface{}) error {
-	return vnf.init(args.(string))
+	return vnf.init(args)
 }
 
 func vnfCreate(vnf *Vnf, args interface{}) error {
-	return vnf.create(args.(string))
+	return vnf.create(args)
 }
 
 func vnfUpdate(vnf *Vnf, args interface{}) error {
-	return vnf.update(args.(string))
+	return vnf.update(args)
 }
 
 func vnfDelete(vnf *Vnf, args interface{}) error {
-	return vnf.delete(args.(string))
+	return vnf.delete(args)
 }
 
 

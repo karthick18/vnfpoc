@@ -5,7 +5,11 @@ import (
 )
 
 type VnfOp int
-type VnfFuture chan error
+
+type VnfFuture struct {
+	name string
+	result chan error
+}
 
 const (
 	VNF_ADMIN_INIT VnfOp = 0 + iota
@@ -26,9 +30,24 @@ func (op VnfOp) String() string {
 	return vnfOps[op]
 }
 
+func newVnfFuture(name string) *VnfFuture {
+	future := new(VnfFuture)
+	future.name = name
+	future.result = make(chan error, VNF_ADMIN_CHANNEL_REQUESTS)
+	return future
+}
+
 //get the result for a VNF operation
 func (vnfFuture VnfFuture) Get() error {
-	return <- vnfFuture
+	return <- vnfFuture.result
+}
+
+func (vnfFuture VnfFuture) Id() string {
+	return vnfFuture.name
+}
+
+func (vnfFuture *VnfFuture) send(err error) {
+	vnfFuture.result <- err
 }
 
 //next state transition map from current state
@@ -50,12 +69,12 @@ type Vnf struct {
 	attr string
 	state VnfOp
 	admin_channel chan VnfWork
-	admin_channel_response VnfFuture
 }
 
 type VnfWork struct {
 	state VnfOp
 	args interface{}
+	future *VnfFuture
 }
 
 func (vnf *Vnf) initialize() error {
@@ -66,7 +85,8 @@ func (vnf *Vnf) initialize() error {
 			if !ok { //channel closed
 				break
 			}
-			vnf.admin_channel_response <- vnf.Sm(vnf_work.state, vnf_work.args)
+			err := vnf.Sm(vnf_work.state, vnf_work.args)
+			vnf_work.future.send(err)
 		}
 	}()
 	return nil
@@ -78,7 +98,6 @@ func newVnf(name string, attr string) *Vnf {
 	vnf.attr = attr
 	vnf.state = VNF_ADMIN_INIT
 	vnf.admin_channel = make(chan VnfWork, VNF_ADMIN_CHANNEL_REQUESTS)
-	vnf.admin_channel_response = make(VnfFuture, VNF_ADMIN_CHANNEL_REQUESTS)
 	return vnf
 }
 
@@ -177,13 +196,13 @@ func (vnfMgr *VnfMgr) removeVnf(vnf *Vnf) {
 }
 
 func (vnfMgr *VnfMgr) createVnfAsync(vnf *Vnf, args interface{}) VnfFuture {
-	future := make(VnfFuture)
+	future := newVnfFuture(vnf.name)
 	go func() {
 		vnfMgr.mutex.Lock()
 		_, ok := vnfMgr.vnfTable[vnf.name]
 		if ok {
 			vnfMgr.mutex.Unlock()
-			future <- fmt.Errorf("VNF %s already exist", vnf.name)
+			future.send(fmt.Errorf("VNF %s already exist", vnf.name))
 			return
 		}
 		vnfMgr.vnfTable[vnf.name] = vnf
@@ -192,15 +211,13 @@ func (vnfMgr *VnfMgr) createVnfAsync(vnf *Vnf, args interface{}) VnfFuture {
 		if err := vnf.initialize(); err != nil {
 			fmt.Println(err)
 			vnfMgr.removeVnf(vnf)
-			future <- err
+			future.send(err)
 			return
 		}
-		vnf_work := VnfWork{state: VNF_ADMIN_CREATE, args: args}
+		vnf_work := VnfWork{state: VNF_ADMIN_CREATE, args: args, future: future}
 		vnf.admin_channel <- vnf_work
-		err := <- vnf.admin_channel_response
-		future <- err
 	} ()
-	return future
+	return *future
 }
 
 func (vnfMgr *VnfMgr) createVnf(name string, args interface{}) VnfFuture {
@@ -209,13 +226,13 @@ func (vnfMgr *VnfMgr) createVnf(name string, args interface{}) VnfFuture {
 }
 
 func (vnfMgr *VnfMgr) adminVnfAsync(name string, op VnfOp, args interface{}) VnfFuture {
-	future := make(VnfFuture)
+	future := newVnfFuture(name)
 	go func() {
 		vnfMgr.mutex.Lock()
 		vnf, ok := vnfMgr.vnfTable[name]
 		if !ok {
 			vnfMgr.mutex.Unlock()
-			future <- fmt.Errorf("VNF %s does not exist", name)
+			future.send(fmt.Errorf("VNF %s does not exist", name))
 			return
 		}
 		if op == VNF_ADMIN_DELETE {
@@ -223,12 +240,10 @@ func (vnfMgr *VnfMgr) adminVnfAsync(name string, op VnfOp, args interface{}) Vnf
 			vnfMgr.numVnfs--
 		}
 		vnfMgr.mutex.Unlock()
-		vnf_work := VnfWork{state: op, args: args}
+		vnf_work := VnfWork{state: op, args: args, future: future}
 		vnf.admin_channel <- vnf_work
-		err := <- vnf.admin_channel_response
-		future <- err
 	} ()
-	return future
+	return *future
 }
 
 func (vnfMgr *VnfMgr) adminVnf(name string, op VnfOp, args interface{}) VnfFuture {
@@ -236,18 +251,18 @@ func (vnfMgr *VnfMgr) adminVnf(name string, op VnfOp, args interface{}) VnfFutur
 }
 
 func (vnfMgr *VnfMgr) nonAdminVnfAsync(name string, op VnfOp, args interface{}) VnfFuture {
-	future := make(VnfFuture)
+	future := newVnfFuture(name)
 	go func() {
 		vnfMgr.mutex.Lock()
 		vnf, ok := vnfMgr.vnfTable[name]
 		vnfMgr.mutex.Unlock()
 		if !ok {
-			future <- fmt.Errorf("VNF %s does not exist", name)
+			future.send(fmt.Errorf("VNF %s does not exist", name))
 			return
 		}
-		future <- vnf.worker(op, args.(string))
+		future.send(vnf.worker(op, args.(string)))
 	} ()
-	return future
+	return *future
 }
 
 func (vnfMgr *VnfMgr) nonAdminVnf(name string, op VnfOp, args interface{}) VnfFuture {

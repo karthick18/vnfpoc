@@ -148,8 +148,7 @@ func delete_vnfs(numVnfs int) {
 			if err != nil {
 				panic(err)
 			}
-			client := &http.Client{}
-			resp, err := client.Do(req)
+			resp, err := http.DefaultClient.Do(req)
 			defer resp.Body.Close()
 			body, err := ioutil.ReadAll(resp.Body)
 			if err != nil {

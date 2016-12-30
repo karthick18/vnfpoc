@@ -286,3 +286,23 @@ func (vnfMgr *VnfMgr) Create(vnfs []string, args []string) []VnfFuture {
 	}
 	return futures
 }
+
+func (vnfMgr *VnfMgr) Get(id string) (Vnf, bool) {
+	vnfMgr.mutex.Lock()
+	defer vnfMgr.mutex.Unlock()
+	vnf, ok := vnfMgr.vnfTable[id]
+	if ok {
+		return *vnf, ok
+	}
+	return Vnf{}, ok
+}
+
+func (vnfMgr *VnfMgr) GetVnfs() []Vnf {
+	var vnfs []Vnf
+	vnfMgr.mutex.Lock()
+	defer vnfMgr.mutex.Unlock()
+	for _, vnf := range vnfMgr.vnfTable {
+		vnfs = append(vnfs, *vnf)
+	}
+	return vnfs
+}

@@ -27,9 +27,10 @@ const (
 	VNF_ADMIN_CHANNEL_REQUESTS = 16
 )
 
-var vnfOps = [...]string{ "VNF_INIT", "VNF_CREATE", "VNF_UPDATE", "VNF_DELETE", "VNF_RANDOM"}
-
-var vnf_regex *regexp.Regexp = regexp.MustCompile("[0-9]+$")
+var (
+	vnfOps = [...]string{ "VNF_INIT", "VNF_CREATE", "VNF_UPDATE", "VNF_DELETE", "VNF_RANDOM"}
+	vnf_regex *regexp.Regexp = regexp.MustCompile("[0-9]+$")
+)
 
 func (op VnfOp) String() string {
 	return vnfOps[op]

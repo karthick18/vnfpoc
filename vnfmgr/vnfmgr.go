@@ -2,6 +2,9 @@ package vnfmgr
 import (
 	"fmt"
 	"sync"
+	"sort"
+	"regexp"
+	"strconv"
 )
 
 type VnfOp int
@@ -25,6 +28,8 @@ const (
 )
 
 var vnfOps = [...]string{ "VNF_INIT", "VNF_CREATE", "VNF_UPDATE", "VNF_DELETE", "VNF_RANDOM"}
+
+var vnf_regex *regexp.Regexp = regexp.MustCompile("[0-9]+$")
 
 func (op VnfOp) String() string {
 	return vnfOps[op]
@@ -71,10 +76,32 @@ type Vnf struct {
 	admin_channel chan VnfWork
 }
 
+type Vnfs []Vnf
+
 type VnfWork struct {
 	state VnfOp
 	args interface{}
 	future *VnfFuture
+}
+
+//sort interface functions for vnfs
+func (vnfs Vnfs) Len() int {
+	return len(vnfs)
+}
+
+func (vnfs Vnfs) Less(i, j int) bool {
+	m1 := vnf_regex.FindString(vnfs[i].name)
+	m2 := vnf_regex.FindString(vnfs[j].name)
+	if m1 != "" && m2 != "" {
+		m1_i, _ := strconv.Atoi(m1)
+		m2_i, _ := strconv.Atoi(m2)
+		return m1_i < m2_i
+	}
+	return vnfs[i].name < vnfs[j].name
+}
+
+func (vnfs Vnfs) Swap(i, j int) {
+	vnfs[i], vnfs[j] = vnfs[j], vnfs[i]
 }
 
 func (vnf *Vnf) initialize() error {
@@ -297,12 +324,13 @@ func (vnfMgr *VnfMgr) Get(id string) (Vnf, bool) {
 	return Vnf{}, ok
 }
 
-func (vnfMgr *VnfMgr) GetVnfs() []Vnf {
-	var vnfs []Vnf
+func (vnfMgr *VnfMgr) GetVnfs() Vnfs {
+	var vnfs Vnfs
 	vnfMgr.mutex.Lock()
 	defer vnfMgr.mutex.Unlock()
 	for _, vnf := range vnfMgr.vnfTable {
 		vnfs = append(vnfs, *vnf)
 	}
+	sort.Sort(vnfs)
 	return vnfs
 }

@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"time"
 )
 
 const (
@@ -180,6 +181,7 @@ func main() {
 	}
 	fmt.Println("Starting vnfmgr REST api server")
 	go vnfmgr.StartREST()
+	time.Sleep(time.Second * 3)
 	create_vnfs(numVnfs)
 	update_vnfs(numVnfs)
 	list_vnfs()

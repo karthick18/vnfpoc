@@ -206,7 +206,7 @@ func vnfDelete(vnf *Vnf, args interface{}) error {
 type VnfMgr struct {
 	numVnfs int
 	vnfTable map[string]*Vnf
-	mutex sync.Mutex
+	sync.Mutex
 }
 
 func NewVnfMgr() *VnfMgr {
@@ -217,25 +217,25 @@ func NewVnfMgr() *VnfMgr {
 }
 
 func (vnfMgr *VnfMgr) removeVnf(vnf *Vnf) {
-	vnfMgr.mutex.Lock()
+	vnfMgr.Lock()
 	delete(vnfMgr.vnfTable, vnf.name)
 	vnfMgr.numVnfs--
-	vnfMgr.mutex.Unlock()
+	vnfMgr.Unlock()
 }
 
 func (vnfMgr *VnfMgr) createVnfAsync(vnf *Vnf, args interface{}) VnfFuture {
 	future := newVnfFuture(vnf.name)
 	go func() {
-		vnfMgr.mutex.Lock()
+		vnfMgr.Lock()
 		_, ok := vnfMgr.vnfTable[vnf.name]
 		if ok {
-			vnfMgr.mutex.Unlock()
+			vnfMgr.Unlock()
 			future.send(fmt.Errorf("VNF %s already exist", vnf.name))
 			return
 		}
 		vnfMgr.vnfTable[vnf.name] = vnf
 		vnfMgr.numVnfs++
-		vnfMgr.mutex.Unlock()
+		vnfMgr.Unlock()
 		if err := vnf.initialize(); err != nil {
 			fmt.Println(err)
 			vnfMgr.removeVnf(vnf)
@@ -256,10 +256,10 @@ func (vnfMgr *VnfMgr) createVnf(name string, args interface{}) VnfFuture {
 func (vnfMgr *VnfMgr) adminVnfAsync(name string, op VnfOp, args interface{}) VnfFuture {
 	future := newVnfFuture(name)
 	go func() {
-		vnfMgr.mutex.Lock()
+		vnfMgr.Lock()
 		vnf, ok := vnfMgr.vnfTable[name]
 		if !ok {
-			vnfMgr.mutex.Unlock()
+			vnfMgr.Unlock()
 			future.send(fmt.Errorf("VNF %s does not exist", name))
 			return
 		}
@@ -267,7 +267,7 @@ func (vnfMgr *VnfMgr) adminVnfAsync(name string, op VnfOp, args interface{}) Vnf
 			delete(vnfMgr.vnfTable, name)
 			vnfMgr.numVnfs--
 		}
-		vnfMgr.mutex.Unlock()
+		vnfMgr.Unlock()
 		vnf_work := VnfWork{state: op, args: args, future: future}
 		vnf.admin_channel <- vnf_work
 	} ()
@@ -281,9 +281,9 @@ func (vnfMgr *VnfMgr) adminVnf(name string, op VnfOp, args interface{}) VnfFutur
 func (vnfMgr *VnfMgr) nonAdminVnfAsync(name string, op VnfOp, args interface{}) VnfFuture {
 	future := newVnfFuture(name)
 	go func() {
-		vnfMgr.mutex.Lock()
+		vnfMgr.Lock()
 		vnf, ok := vnfMgr.vnfTable[name]
-		vnfMgr.mutex.Unlock()
+		vnfMgr.Unlock()
 		if !ok {
 			future.send(fmt.Errorf("VNF %s does not exist", name))
 			return
@@ -316,8 +316,8 @@ func (vnfMgr *VnfMgr) Create(vnfs []string, args []string) []VnfFuture {
 }
 
 func (vnfMgr *VnfMgr) Get(id string) (Vnf, bool) {
-	vnfMgr.mutex.Lock()
-	defer vnfMgr.mutex.Unlock()
+	vnfMgr.Lock()
+	defer vnfMgr.Unlock()
 	vnf, ok := vnfMgr.vnfTable[id]
 	if ok {
 		return *vnf, ok
@@ -327,8 +327,8 @@ func (vnfMgr *VnfMgr) Get(id string) (Vnf, bool) {
 
 func (vnfMgr *VnfMgr) GetVnfs() Vnfs {
 	var vnfs Vnfs
-	vnfMgr.mutex.Lock()
-	defer vnfMgr.mutex.Unlock()
+	vnfMgr.Lock()
+	defer vnfMgr.Unlock()
 	for _, vnf := range vnfMgr.vnfTable {
 		vnfs = append(vnfs, *vnf)
 	}
